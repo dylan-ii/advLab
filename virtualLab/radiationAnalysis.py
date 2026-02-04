@@ -65,79 +65,80 @@ background_temp_C = 22.2
 background_temp_K = background_temp_C + 273.15
 background_voltage_mV = 0.060
 
-voltages_temp_corrected = np.array(temp_voltage_data['Voltage_mV']) - background_voltage_mV
-voltages_angle_corrected = np.array(angle_voltage_data['Voltage_mV']) - background_voltage_mV
-
 temps_C = np.array(temp_voltage_data['Temperature_C'])
 temps_K = temps_C + 273.15
-T4 = temps_K**4
+voltages_full = np.array(temp_voltage_data['Voltage_mV']) 
 
-slope_T4, intercept_T4, r_T4, p_T4, std_err_T4 = linregress(T4, voltages_temp_corrected)
+T0 = background_temp_K
+V0 = background_voltage_mV
 
-log_T = np.log(temps_K[1:])
-log_V = np.log(voltages_temp_corrected[1:])
-slope_log, intercept_log, r_log, _, _ = linregress(log_T, log_V)
+T4_minus_T0_4 = temps_K**4 - T0**4
 
-# angle vs voltage with corrected voltages
+V_minus_V0 = voltages_full - V0
+
+A = np.sum(V_minus_V0 * T4_minus_T0_4) / np.sum(T4_minus_T0_4**2)
+
+SS_res = np.sum((V_minus_V0 - A*T4_minus_T0_4)**2)
+SS_tot = np.sum((V_minus_V0 - np.mean(V_minus_V0))**2)
+R2 = 1 - SS_res/SS_tot
+
+log_T4_diff = np.log(T4_minus_T0_4[1:])
+log_V_diff = np.log(V_minus_V0[1:])
+
+slope_log, intercept_log, r_log, _, _ = linregress(log_T4_diff, log_V_diff)
+
+#angle analysis
+voltages_angle_full = np.array(angle_voltage_data['Voltage_mV'])
+V0_angle = background_voltage_mV
+V_angle_minus_V0 = voltages_angle_full - V0_angle
+
 angles = np.array(angle_voltage_data['Angle_deg'])
 angles_rad = np.radians(angles)
-
 cos_angles = np.cos(angles_rad)
-slope, intercept, r_value, p_value, std_err = linregress(cos_angles, voltages_angle_corrected)
 
-# stefan-boltzmann constant estimation based on guide
+slope_angle, intercept_angle, r_angle, p_value, std_err = linregress(cos_angles, V_angle_minus_V0)
+
+# stefan-boltzmann constant estimation
 R_m = R_mean / 100  # cm -> m
 aperture_radius = APERTURE_DIAMETER / 2 / 100  # cm -> m
 sensor_radius = SENSOR_DIAMETER / 2 / 100  # cm -> m
 
-# areas in m^2
 aperture_area_m2 = np.pi * (aperture_radius)**2
 sensor_area_m2 = np.pi * (sensor_radius)**2
 
-slope_T4_V = slope_T4 / 1000  # mV -> V
+slope_V = A / 1000  # mV -> V
 
 # from guide: σ = (slope * piR^2) / (resp * A_ap * A_det)
-sigma_est = (slope_T4_V * np.pi * R_m**2) / (THERMOPILE_RESPONSIVITY * aperture_area_m2 * sensor_area_m2)
+sigma_est = (slope_V * np.pi * R_m**2) / (THERMOPILE_RESPONSIVITY * aperture_area_m2 * sensor_area_m2)
 
 print(f"\nresults:")
-
-# error propagation
-slope_T4_V_error = std_err_T4 / 1000
-R_m_error = R_error / 100
-
-rel_slope_error = slope_T4_V_error / slope_T4_V
-rel_R_error = R_m_error / R_m
-
-# for σ ∝ slope * R^2, δσ/σ = sqrt((δslope/slope)^2 + (2δR/R)^2)
-sigma_est_error = sigma_est * np.sqrt(rel_slope_error**2 + (2 * rel_R_error)**2)
-
-print(f"  estimated stefan-boltzmann constant: {sigma_est:.2e} ± {sigma_est_error:.2e} W/m²K⁴")
+print(f"  estimated stefan-boltzmann constant: {sigma_est:.2e} W/m²K⁴")
 print(f"  expected value: 5.67e-08 W/m²K⁴")
 print(f"  ratio: {sigma_est/5.67e-08:.2f}")
 
-print(f"\n  exponent (slope): {slope_log:.3f} (supposed to be 4)")
+print(f"  exponent for T^4 dependence (multiply by 4): {slope_log*4:.3f}")
 
 # plots
 fig, axes = plt.subplots(2, 2, figsize=(14, 10))
 
-# angle vs voltage
+# panel A: angle vs voltage
 ax1 = axes[0, 0]
-ax1.scatter(angles, voltages_angle_corrected, color='blue', s=50)
+ax1.scatter(angles, V_angle_minus_V0, color='blue', s=50)
 angles_smooth = np.linspace(-10, 60, 100)
-cos_fit = slope * np.cos(np.radians(angles_smooth)) + intercept
-ax1.plot(angles_smooth, cos_fit, 'r--', label=f'Fit: V = {slope:.1f}cosθ + {intercept:.2f}\nR² = {r_value**2:.3f}')
+cos_fit = slope_angle * np.cos(np.radians(angles_smooth)) + intercept_angle
+ax1.plot(angles_smooth, cos_fit, 'r--', label=f'Fit: V = {slope_angle:.1f}cosθ + {intercept_angle:.2f}\nR² = {r_angle**2:.3f}')
 ax1.set_xlabel('Angle θ (degrees)', fontweight='bold', fontsize=20)
 ax1.set_ylabel('Voltage (mV)', fontweight='bold', fontsize=20)
 ax1.set_title('Cosine Dependence', fontweight='bold', fontsize=30)
 ax1.legend(fontsize=15)
 ax1.grid(True, alpha=0.3)
 
-# voltage vs cos(angle)
+# panel B: voltage vs cos(angle)
 ax2 = axes[0, 1]
-ax2.scatter(cos_angles, voltages_angle_corrected, color='green', s=50)
+ax2.scatter(cos_angles, V_angle_minus_V0, color='green', s=50)
 cos_range = np.linspace(min(cos_angles), max(cos_angles), 100)
-ax2.plot(cos_range, slope * cos_range + intercept, 'r--', 
-         label=f'Linear fit: V = {slope:.1f}cosθ + {intercept:.2f}\nR² = {r_value**2:.3f}')
+ax2.plot(cos_range, slope_angle * cos_range + intercept_angle, 'r--', 
+         label=f'Linear fit: V = {slope_angle:.1f}cosθ + {intercept_angle:.2f}\nR² = {r_angle**2:.3f}')
 ax2.axhline(y=0, color='k', linestyle='-', alpha=0.3)
 ax2.set_xlabel('cos(θ)', fontweight='bold', fontsize=20)
 ax2.set_ylabel('Voltage (mV)', fontweight='bold', fontsize=20)
@@ -145,29 +146,32 @@ ax2.set_title('V ∝ cos(θ)', fontweight='bold', fontsize=30)
 ax2.legend(fontsize=15)
 ax2.grid(True, alpha=0.3)
 
-# temperature vs voltage
+# panel C: temperature vs voltage (corrected)
 ax3 = axes[1, 0]
-ax3.scatter(temps_C, voltages_temp_corrected, color='red', s=50, alpha=0.5)
+ax3.scatter(temps_C, V_minus_V0, color='red', s=50, alpha=0.5)
 temp_fit = np.linspace(min(temps_C), max(temps_C), 100)
 temp_fit_K = temp_fit + 273.15
-voltage_fit = slope_T4 * temp_fit_K**4 + intercept_T4
+T4_diff_fit = temp_fit_K**4 - T0**4
+voltage_fit = A * T4_diff_fit
 ax3.plot(temp_fit, voltage_fit, 'b--', 
-         label=f'Fit: R² = {r_T4**2:.3f}')
+         label=f'Fit: V = {A:.2e}×(T⁴-T₀⁴)\nR² = {R2:.3f}')
 ax3.set_xlabel('Temperature (°C)',fontweight='bold', fontsize=20)
 ax3.set_ylabel('Voltage (mV)', fontweight='bold', fontsize=20)
 ax3.set_title('Stefan-Boltzmann Law', fontweight='bold', fontsize=30)
 ax3.legend(fontsize=15)
 ax3.grid(True, alpha=0.3)
 
-# voltage vs T^4
+# panel D: V-V0 vs (T⁴-T0⁴)
 ax4 = axes[1, 1]
-ax4.scatter(T4, voltages_temp_corrected, color='purple', s=50)
-T4_range = np.linspace(min(T4), max(T4), 100)
-ax4.plot(T4_range, slope_T4 * T4_range + intercept_T4, 'g--',
-         label=f'Linear fit: V = {slope_T4:.2e}T⁴ + {intercept_T4:.2f}\nR² = {r_T4**2:.3f}')
+ax4.scatter(T4_minus_T0_4, V_minus_V0, color='purple', s=50)
+T4_range = np.linspace(min(T4_minus_T0_4), max(T4_minus_T0_4), 100)
+ax4.plot(T4_range, A * T4_range, 'g--',
+         label=f'Linear fit: V = {A:.2e}×(T⁴-T₀⁴)\nR² = {R2:.6f}\nSlope = {A:.2e} mV/K⁴')
+ax4.axhline(y=0, color='k', linestyle='-', alpha=0.3)
+ax4.axvline(x=0, color='k', linestyle='-', alpha=0.3)
 ax4.set_xlabel('T⁴ (K⁴)', fontweight='bold',fontsize=20)
 ax4.set_ylabel('Voltage (mV)', fontweight='bold', fontsize=20)
-ax4.set_title('V ∝ T⁴', fontweight='bold', fontsize=30)
+ax4.set_title('V ∝ (T⁴)', fontweight='bold', fontsize=30)
 ax4.legend(fontsize=15)
 ax4.grid(True, alpha=0.3)
 
