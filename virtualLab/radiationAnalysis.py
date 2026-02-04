@@ -120,7 +120,7 @@ print(f"\n  exponent (slope): {slope_log:.3f} (supposed to be 4)")
 # plots
 fig, axes = plt.subplots(2, 2, figsize=(14, 10))
 
-# angle vs voltage with corrected data
+# angle vs voltage
 ax1 = axes[0, 0]
 ax1.scatter(angles, voltages_angle_corrected, color='blue', s=50)
 angles_smooth = np.linspace(-10, 60, 100)
@@ -132,7 +132,7 @@ ax1.set_title('Cosine Dependence', fontweight='bold', fontsize=30)
 ax1.legend(fontsize=15)
 ax1.grid(True, alpha=0.3)
 
-# voltage vs cos(angle) with corrected data
+# voltage vs cos(angle)
 ax2 = axes[0, 1]
 ax2.scatter(cos_angles, voltages_angle_corrected, color='green', s=50)
 cos_range = np.linspace(min(cos_angles), max(cos_angles), 100)
@@ -145,7 +145,7 @@ ax2.set_title('V ∝ cos(θ)', fontweight='bold', fontsize=30)
 ax2.legend(fontsize=15)
 ax2.grid(True, alpha=0.3)
 
-# temperature vs voltage with corrected data
+# temperature vs voltage
 ax3 = axes[1, 0]
 ax3.scatter(temps_C, voltages_temp_corrected, color='red', s=50, alpha=0.5)
 temp_fit = np.linspace(min(temps_C), max(temps_C), 100)
@@ -159,7 +159,7 @@ ax3.set_title('Stefan-Boltzmann Law', fontweight='bold', fontsize=30)
 ax3.legend(fontsize=15)
 ax3.grid(True, alpha=0.3)
 
-# voltage vs T^4 with corrected data
+# voltage vs T^4
 ax4 = axes[1, 1]
 ax4.scatter(T4, voltages_temp_corrected, color='purple', s=50)
 T4_range = np.linspace(min(T4), max(T4), 100)
