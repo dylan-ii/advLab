@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.stats import linregress
 
-#test commits
+#test commits 2
 
 # table I: distance d measurements (cm)
 d_measurements = np.array([11.38, 11.17, 11.32, 11.40, 11.23, 11.18, 11.11, 11.22])
